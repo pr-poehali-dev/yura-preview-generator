@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 export default function Index() {
@@ -10,10 +11,138 @@ export default function Index() {
   const [title, setTitle] = useState('');
   const [theme, setTheme] = useState('');
   const [style, setStyle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<{
+    success: boolean;
+    image_url: string;
+    title: string;
+    message: string;
+    ai_analysis: {
+      similar_videos: Array<{title: string; views: string}>;
+      color_scheme: string[];
+      recommended_style: string;
+      font_suggestions: string[];
+    };
+  } | null>(null);
+  const [contactName, setContactName] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const { toast } = useToast();
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
+    }
+  };
+
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleGeneratePreview = async () => {
+    if (!image || !title) {
+      toast({
+        title: 'Ошибка',
+        description: 'Загрузите фото и укажите название видео',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const imageBase64 = await convertFileToBase64(image);
+      
+      const response = await fetch('https://functions.poehali.dev/ecf7d069-82be-4872-b239-ecd58c2ca99e', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: imageBase64,
+          title,
+          theme,
+          style
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPreviewResult(data);
+        toast({
+          title: 'Успех! 🎮',
+          description: data.message
+        });
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.error || 'Не удалось создать превью',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при генерации',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!contactName || !contactMessage) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('https://functions.poehali.dev/66b9763b-8aff-48b5-822c-7af0232ccfaf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: contactName,
+          message: contactMessage
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Отправлено! ✉️',
+          description: 'Сообщение отправлено в Telegram'
+        });
+        setContactName('');
+        setContactMessage('');
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.error || 'Не удалось отправить сообщение',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при отправке',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,11 +257,44 @@ export default function Index() {
             </div>
 
             <Button 
-              className="w-full bg-[#5c8f3e] hover:bg-[#4a7a2e] text-white font-bold py-6 text-lg pixel-corners animate-pulse-glow shadow-2xl"
+              onClick={handleGeneratePreview}
+              disabled={loading}
+              className="w-full bg-[#5c8f3e] hover:bg-[#4a7a2e] text-white font-bold py-6 text-lg pixel-corners animate-pulse-glow shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Icon name="Sparkles" size={24} className="mr-2" />
-              Создать Превью
+              {loading ? 'Генерация...' : 'Создать Превью'}
             </Button>
+
+            {previewResult && (
+              <div className="mt-6 p-6 bg-[#2c1c10] border border-[#5c8f3e] rounded-sm space-y-4">
+                <h3 className="text-xl font-bold text-[#5c8f3e] mb-4">✨ Результат</h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-[#d4a574] mb-2">Ваше превью:</p>
+                    <img src={previewResult.image_url} alt="Preview" className="w-full rounded-sm border-2 border-[#5c8f3e]" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#d4a574] mb-2">Похожие видео:</p>
+                    <div className="space-y-2">
+                      {previewResult.ai_analysis.similar_videos.map((video, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center text-[#f5deb3] bg-[#3c2c1c] p-2 rounded-sm">
+                          <span className="text-sm">{video.title}</span>
+                          <span className="text-xs text-[#8a7a6a]">{video.views} просмотров</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#d4a574] mb-2">Рекомендуемые цвета:</p>
+                    <div className="flex gap-2">
+                      {previewResult.ai_analysis.color_scheme.map((color: string, idx: number) => (
+                        <div key={idx} className="w-12 h-12 rounded-sm border-2 border-[#5c4a3a]" style={{backgroundColor: color}} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -257,6 +419,8 @@ export default function Index() {
               </label>
               <Input
                 placeholder="Введите имя"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
                 className="bg-[#2c1c10] border-[#5c4a3a] text-[#f5deb3] placeholder:text-[#8a7a6a] focus:border-[#5c8f3e]"
               />
             </div>
@@ -267,15 +431,19 @@ export default function Index() {
               </label>
               <Textarea
                 placeholder="Ваш вопрос или предложение"
+                value={contactMessage}
+                onChange={(e) => setContactMessage(e.target.value)}
                 className="bg-[#2c1c10] border-[#5c4a3a] text-[#f5deb3] placeholder:text-[#8a7a6a] focus:border-[#5c8f3e] min-h-[120px]"
               />
             </div>
 
             <Button 
-              className="w-full bg-[#5c8f3e] hover:bg-[#4a7a2e] text-white font-bold py-6 text-lg pixel-corners"
+              onClick={handleSendMessage}
+              disabled={loading}
+              className="w-full bg-[#5c8f3e] hover:bg-[#4a7a2e] text-white font-bold py-6 text-lg pixel-corners disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Icon name="Send" size={24} className="mr-2" />
-              Отправить в Telegram
+              {loading ? 'Отправка...' : 'Отправить в Telegram'}
             </Button>
 
             <p className="text-center text-sm text-[#8a7a6a]">

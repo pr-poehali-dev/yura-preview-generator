@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "Generate preview with valid data",
+      "method": "POST",
+      "body": {
+        "image": "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+        "title": "КАК ПОСТРОИТЬ ДОМ В МАЙНКРАФТ",
+        "theme": "Строительство",
+        "style": "Яркий"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "image_url": "string",
+        "ai_analysis": {
+          "similar_videos": "array"
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Reject request without image",
+      "method": "POST",
+      "body": {
+        "title": "Тест",
+        "theme": "Тема"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
